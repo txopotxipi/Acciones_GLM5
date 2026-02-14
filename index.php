@@ -2,11 +2,7 @@
 // ==========================================
 // CONFIGURACIÓN DE BASE DE DATOS
 // ==========================================
- $host = 'sql308.infinityfree.com';
- $db   = 'if0_37663314_acciones_glm5';
- $user = 'if0_37663314';
- $pass = 'jorNnRX4Ml7VH';
- $charset = 'utf8mb4';
+require 'config.php';
 
  $dsn = "mysql:host=$host;dbname=$db;charset=$charset";
  $options = [
