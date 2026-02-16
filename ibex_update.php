@@ -2,6 +2,7 @@
 // ibex_update.php — Fetch IBEX35 server-side and save to DB
 // Called via AJAX from the frontend
 require_once 'config.php';
+date_default_timezone_set('Europe/Madrid');
 
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
@@ -95,12 +96,13 @@ try {
     $sql = "UPDATE valores SET 
             precio_actual = :p,
             precio_cierre_anterior = :pc,
-            ultima_actualizacion = NOW()
+            ultima_actualizacion = :ts
             WHERE ticker = :ticker";
     $stmt = $pdo->prepare($sql);
     $stmt->execute([
         ':p'      => round($price, 2),
         ':pc'     => round($previousClose, 2),
+        ':ts'     => date('Y-m-d H:i:s'),
         ':ticker' => $ticker,
     ]);
 } catch (Exception $e) {

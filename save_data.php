@@ -1,6 +1,7 @@
 <?php
 // save_data.php
 require_once 'config.php';
+date_default_timezone_set('Europe/Madrid');
 
 $data = json_decode(file_get_contents('php://input'), true);
 if (!$data || !isset($data['ticker'])) die('Error');
@@ -26,7 +27,7 @@ $sql = "UPDATE valores SET
         eps = IF(:eps > 0, :eps2, eps),
         revenue = IF(:rev > 0, :rev2, revenue),
         history_json = :hist,
-        ultima_actualizacion = NOW()
+        ultima_actualizacion = :ts
         WHERE ticker = :ticker OR ticker_yahoo = :ticker2";
 
 $stmt = $pdo->prepare($sql);
@@ -58,6 +59,7 @@ $stmt->execute([
     ':rev' => $clean($data['rev']),
     ':rev2' => $clean($data['rev']),
     ':hist' => $data['history'] ?? '[]',
+    ':ts' => date('Y-m-d H:i:s'),
     ':ticker' => $data['ticker'],
     ':ticker2' => $data['ticker']
 ]);

@@ -3,6 +3,7 @@
 // Run manually via browser: https://tudominio.com/cron_update.php
 // Or set as cron job on InfinityFree
 require_once 'config.php';
+date_default_timezone_set('Europe/Madrid');
 
 header('Content-Type: application/json; charset=utf-8');
 set_time_limit(120);
@@ -38,7 +39,7 @@ foreach ($tickers as $row) {
                 eps = IF(:eps > 0, :eps2, eps),
                 revenue = IF(:rev > 0, :rev2, revenue),
                 history_json = :hist,
-                ultima_actualizacion = NOW()
+                ultima_actualizacion = :ts
                 WHERE ticker = :ticker OR ticker_yahoo = :ticker2";
 
             $stmt = $pdo->prepare($sql);
@@ -70,6 +71,7 @@ foreach ($tickers as $row) {
                 ':rev' => $data['revenue'],
                 ':rev2' => $data['revenue'],
                 ':hist' => $data['history_json'],
+                ':ts' => date('Y-m-d H:i:s'),
                 ':ticker' => $row['ticker'],
                 ':ticker2' => $symbol,
             ]);

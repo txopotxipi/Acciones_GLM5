@@ -842,14 +842,10 @@ function fetchTicker(ticker, index, total, log, onDone) {
             });
 
             // Price = último cierre disponible
-            // Previous = cierre de la sesión anterior (más preciso desde meta)
+            // Previous = penúltimo cierre (= cierre de la sesión anterior)
             var price = 0, previous = 0;
             if (historyArray.length > 0) price = historyArray[historyArray.length - 1].y;
-            if (res.meta && res.meta.chartPreviousClose) {
-                previous = res.meta.chartPreviousClose;
-            } else if (historyArray.length > 1) {
-                previous = historyArray[historyArray.length - 2].y;
-            }
+            if (historyArray.length > 1) previous = historyArray[historyArray.length - 2].y;
 
             var fund = res.meta.fundamentals || {};
 
