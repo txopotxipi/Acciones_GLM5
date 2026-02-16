@@ -7,6 +7,10 @@ config.php
 .DS_Store
 Thumbs.db
 
+# SQL dumps con datos sensibles
+*.sql
+!sql/upgrade_schema.sql
+
 # Directorios de IDE
 .idea/
 .vscode/
