@@ -62,24 +62,28 @@ $timestamps = $result['timestamp'] ?? [];
 
 // Get current price from meta
 $price = $meta['regularMarketPrice'] ?? 0;
-$previousClose = $meta['previousClose'] ?? $meta['chartPreviousClose'] ?? 0;
 
-// Fallback: derive from close array
-if ($price <= 0 && !empty($quotes['close'])) {
-    for ($i = count($quotes['close']) - 1; $i >= 0; $i--) {
-        if ($quotes['close'][$i]) {
-            $price = $quotes['close'][$i];
-            break;
-        }
+// Build array of valid daily closes
+$dailyCloses = [];
+for ($i = 0; $i < count($timestamps); $i++) {
+    if (isset($quotes['close'][$i]) && $quotes['close'][$i] > 0) {
+        $dailyCloses[] = ['ts' => $timestamps[$i], 'close' => $quotes['close'][$i]];
     }
 }
-if ($previousClose <= 0 && !empty($quotes['close'])) {
-    for ($i = count($quotes['close']) - 2; $i >= 0; $i--) {
-        if ($quotes['close'][$i]) {
-            $previousClose = $quotes['close'][$i];
-            break;
-        }
-    }
+
+// previousClose = cierre del penúltimo día de cotización (ej: viernes si hoy es lunes)
+$previousClose = 0;
+if (count($dailyCloses) >= 2) {
+    $previousClose = $dailyCloses[count($dailyCloses) - 2]['close'];
+}
+// Fallback to meta if no history
+if ($previousClose <= 0) {
+    $previousClose = $meta['previousClose'] ?? $meta['chartPreviousClose'] ?? 0;
+}
+
+// Fallback price from close array if meta failed
+if ($price <= 0 && count($dailyCloses) > 0) {
+    $price = $dailyCloses[count($dailyCloses) - 1]['close'];
 }
 
 // Calculate change

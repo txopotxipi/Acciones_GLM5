@@ -123,7 +123,11 @@ $marketOpen = ($dow <= 5 && (($hora > 9 || ($hora == 9 && $min >= 0)) && ($hora 
                             break;
                         }
                     }
-                    if ($update) echo 'Última act: ' . date('d/m H:i', strtotime($update));
+                    if ($update) {
+                        $dt = new DateTime($update, new DateTimeZone('UTC'));
+                        $dt->setTimezone(new DateTimeZone('Europe/Madrid'));
+                        echo 'Última act: ' . $dt->format('d/m H:i');
+                    }
                     ?>
                 </div>
                 <button id="btn-update" onclick="actualizarMercado()" class="btn btn-primary">⟳ Actualizar</button>
