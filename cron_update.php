@@ -103,7 +103,7 @@ function calcTechScore_cron($val, $prices, $price) {
         elseif ($potential > 5) $score += 8;
         elseif ($potential < -5) $score -= 15;
     }
-    $pe = (float)($val['pe_ratio'] ?? 0);
+    $pe = (float)($val['pe_ratio'] ?? $val['pe'] ?? 0);
     if ($pe > 0) {
         if ($pe < 10) $score += 15;
         elseif ($pe < 15) $score += 8;
@@ -199,20 +199,16 @@ foreach ($tickers as $row) {
             }
 
             // Only overwrite fundamental fields if API returned real values (not 0)
+            // Columnas reales del esquema de producción (sin high_last, low_last,
+            // pe_ratio, market_cap, etc.; se usan trailing_pe y target_mean_price).
             $sql = "UPDATE valores SET
                 precio_actual = :p,
                 precio_cierre_anterior = :pc,
-                pe_ratio = IF(:pe > 0, :pe2, pe_ratio),
-                market_cap = IF(:cap > 0, :cap2, market_cap),
-                target_price = IF(:t > 0, :t2, target_price),
+                trailing_pe = IF(:pe > 0, :pe2, trailing_pe),
+                target_mean_price = IF(:t > 0, :t2, target_mean_price),
                 dividend_yield = IF(:d > 0, :d2, dividend_yield),
-                beta = IF(:b > 0, :b2, beta),
                 fifty_two_week_high = IF(:h52 > 0, :h522, fifty_two_week_high),
                 fifty_two_week_low = IF(:l52 > 0, :l522, fifty_two_week_low),
-                avg_volume = IF(:vol > 0, :vol2, avg_volume),
-                price_to_book = IF(:pb > 0, :pb2, price_to_book),
-                eps = IF(:eps > 0, :eps2, eps),
-                revenue = IF(:rev > 0, :rev2, revenue),
                 history_json = :hist,
                 rsi_14 = IF(:has_rsi = 1, :rsi, rsi_14),
                 sma_20 = IF(:has_sma20 = 1, :sma20, sma_20),
@@ -229,26 +225,14 @@ foreach ($tickers as $row) {
                 ':pc' => $data['previous_close'],
                 ':pe' => $data['pe'],
                 ':pe2' => $data['pe'],
-                ':cap' => $data['market_cap'],
-                ':cap2' => $data['market_cap'],
                 ':t' => $data['target_price'],
                 ':t2' => $data['target_price'],
                 ':d' => $data['dividend_yield'],
                 ':d2' => $data['dividend_yield'],
-                ':b' => $data['beta'],
-                ':b2' => $data['beta'],
                 ':h52' => $data['fifty_two_week_high'],
                 ':h522' => $data['fifty_two_week_high'],
                 ':l52' => $data['fifty_two_week_low'],
                 ':l522' => $data['fifty_two_week_low'],
-                ':vol' => $data['avg_volume'],
-                ':vol2' => $data['avg_volume'],
-                ':pb' => $data['price_to_book'],
-                ':pb2' => $data['price_to_book'],
-                ':eps' => $data['eps'],
-                ':eps2' => $data['eps'],
-                ':rev' => $data['revenue'],
-                ':rev2' => $data['revenue'],
                 ':hist' => $mergedHistJson,
                 ':has_rsi' => $rsiVal !== null ? 1 : 0,
                 ':rsi' => $rsiVal !== null ? round($rsiVal, 2) : null,
