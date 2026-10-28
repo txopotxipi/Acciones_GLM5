@@ -472,9 +472,10 @@ $marketOpen = ($dow <= 5 && (($hora > 9 || ($hora == 9 && $min >= 0)) && ($hora 
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.6.1/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
 
-    <!-- PWA & Favicon Support: manifiesto same-origin servido por manifest.php.
-         Un data: URI deja start_url/scope sin base URL y la PWA deja de ser instalable -->
-    <link rel="manifest" href="manifest.php?v=4.0">
+    <!-- PWA & Favicon Support: el manifiesto es un fichero estático (.webmanifest):
+         el anti-bot de InfinityFree responde HTML a la petición de Manifest que hace
+         el parser de Chrome a un recurso .php, y Chrome la rechaza como "Syntax error" -->
+    <link rel="manifest" href="manifest.webmanifest">
     <link rel="icon" type="image/png" href="icon-192.png">
     <link rel="shortcut icon" href="favicon.ico">
     <meta name="theme-color" content="#6366f1">
