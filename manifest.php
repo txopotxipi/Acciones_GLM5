@@ -1,6 +1,6 @@
 <?php
 // manifest.php — Servidor dinámico de manifest PWA para hosting compatible
-header('Content-Type: application/manifest+json; charset=utf-8');
+header('Content-Type: application/manifest+json'); // sin charset: el parser de Chrome falla con parámetros (JSON ya es UTF-8 por defecto)
 header('Access-Control-Allow-Origin: *');
 ?>
 {
