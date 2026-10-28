@@ -1,0 +1,28 @@
+# .htaccess — Cartera Pro GLM5
+# Configuración de tipos MIME para PWA y seguridad en Apache / InfinityFree
+
+<IfModule mod_mime.c>
+    AddType application/manifest+json .json
+    AddType application/manifest+json .webmanifest
+    AddType image/png .png
+    AddType image/x-icon .ico
+    AddType text/javascript .js
+</IfModule>
+
+<IfModule mod_headers.c>
+    # Restringir CORS al dominio específico
+    Header set Access-Control-Allow-Origin "https://txopo13.lovestoblog.com"
+    Header set Access-Control-Allow-Headers "Origin, X-Requested-With, Content-Type, Accept, X-Api-Key"
+</IfModule>
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    # Pasar cabeceras personalizadas a PHP
+    RewriteRule .* - [E=HTTP_X_API_KEY:%{HTTP:X-Api-Key}]
+</IfModule>
+
+# Bloquear acceso a archivos sensibles
+<FilesMatch "\.(sql|env|tmp|bak|backup|log|example)$">
+    Order Deny,Allow
+    Deny from all
+</FilesMatch>

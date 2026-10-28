@@ -10,7 +10,7 @@ header('Access-Control-Allow-Origin: *');
 $ticker = '^IBEX';
 
 // Step 1: Get cookies from Yahoo
-$cookieJar = sys_get_temp_dir() . '/yahoo_cookie_ibex.txt';
+$cookieJar = __DIR__ . '/yahoo_cookie_ibex.tmp';
 
 $ch = curl_init("https://finance.yahoo.com/quote/%5EIBEX");
 curl_setopt_array($ch, [

@@ -1,0 +1,248 @@
+/* ============================================================
+   Cartera Pro GLM5 — mejoras_v3.css
+   Se carga DESPUÉS de style.css. Solo añade estilos de las
+   nuevas funciones v3; no toca los existentes.
+   ============================================================ */
+
+/* ---------- Visibilidad y animaciones ---------- */
+.fade-in {
+    opacity: 1 !important;
+    transform: translateY(0) !important;
+}
+.fade-in.is-visible {
+    opacity: 1 !important;
+    transform: translateY(0) !important;
+}
+
+/* ---------- Modal display ---------- */
+.modal.open {
+    display: block !important;
+}
+
+/* ---------- KPIs v3: rejilla de 6 tarjetas ---------- */
+.dashboard-grid-v3 {
+    grid-template-columns: repeat(6, 1fr);
+}
+.badge-v3 {
+    display: inline-block;
+    font-size: 0.55rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    color: #fff;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    border-radius: 999px;
+    padding: 0.1rem 0.4rem;
+    vertical-align: middle;
+    margin-left: 0.25rem;
+}
+
+/* ---------- Centro de Decisiones ---------- */
+.decision-center { margin-bottom: 1.25rem; }
+.alerts-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.65rem;
+}
+.alert-item {
+    display: flex;
+    gap: 0.65rem;
+    align-items: flex-start;
+    padding: 0.75rem 0.9rem;
+    border-radius: 10px;
+    font-size: 0.82rem;
+    border: 1px solid transparent;
+    background: var(--bg-card, rgba(255,255,255,0.03));
+}
+.alert-item .alert-icon { font-size: 1.1rem; line-height: 1.2; }
+.alert-item strong { display: block; font-size: 0.82rem; margin-bottom: 0.15rem; }
+.alert-item p { margin: 0; font-size: 0.76rem; color: var(--text-muted, #94a3b8); line-height: 1.45; }
+.alert-danger { border-color: rgba(239,68,68,0.45); background: rgba(239,68,68,0.08); }
+.alert-warn   { border-color: rgba(245,158,11,0.45); background: rgba(245,158,11,0.08); }
+.alert-ok     { border-color: rgba(16,185,129,0.40); background: rgba(16,185,129,0.07); }
+.alert-info   { border-color: rgba(99,102,241,0.40); background: rgba(99,102,241,0.07); }
+
+/* ---------- Panel de Riesgo ---------- */
+.risk-panel { margin-bottom: 1.25rem; }
+.risk-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 0.65rem;
+}
+.risk-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    padding: 0.75rem 0.9rem;
+    border-radius: 10px;
+    background: var(--bg-card, rgba(255,255,255,0.03));
+    border: 1px solid var(--border, rgba(148,163,184,0.12));
+}
+.risk-label { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted, #94a3b8); }
+.risk-value { font-size: 1.25rem; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+.risk-note { font-size: 0.68rem; color: var(--text-muted, #94a3b8); line-height: 1.3; }
+
+/* ---------- Tabla: peso, señal ---------- */
+.weight-bar {
+    width: 64px;
+    height: 4px;
+    border-radius: 4px;
+    background: var(--border, rgba(148,163,184,0.15));
+    margin-left: auto;
+    margin-top: 3px;
+    overflow: hidden;
+}
+.weight-bar i { display: block; height: 100%; border-radius: 4px; }
+.signal-pill {
+    display: inline-block;
+    padding: 0.2rem 0.55rem;
+    border-radius: 999px;
+    font-size: 0.66rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+}
+.signal-buy  { background: rgba(16,185,129,0.16); color: #10b981; border: 1px solid rgba(16,185,129,0.4); }
+.signal-hold { background: rgba(245,158,11,0.14); color: #f59e0b; border: 1px solid rgba(245,158,11,0.4); }
+.signal-sell { background: rgba(239,68,68,0.14); color: #ef4444; border: 1px solid rgba(239,68,68,0.4); }
+
+/* ---------- Donut con etiqueta HHI ---------- */
+.chart-container-donut {
+    position: relative;
+    min-height: 280px;
+}
+.donut-center-label {
+    position: absolute;
+    top: 40%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    pointer-events: none;
+    background: rgba(15, 23, 42, 0.55);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    padding: 0.5rem;
+    border-radius: 50%;
+    width: 88px;
+    height: 88px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+}
+.donut-center-value {
+    display: block;
+    font-size: 1.2rem;
+    font-weight: 800;
+    font-family: 'JetBrains Mono', monospace;
+    line-height: 1.1;
+}
+.donut-center-text {
+    display: block;
+    font-size: 0.60rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    color: var(--text-muted, #94a3b8);
+    text-transform: uppercase;
+    margin-top: 2px;
+}
+.hhi-note {
+    margin: 0.75rem 0 0;
+    font-size: 0.75rem;
+    color: var(--text-muted, #94a3b8);
+    text-align: center;
+    line-height: 1.4;
+}
+
+/* ---------- Modal: Tu Posición ---------- */
+.position-summary { margin-bottom: 1.25rem; }
+.position-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 0.6rem;
+}
+.position-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    padding: 0.6rem 0.7rem;
+    border-radius: 8px;
+    background: var(--bg-card, rgba(255,255,255,0.03));
+    border: 1px solid var(--border, rgba(148,163,184,0.12));
+    text-align: center;
+}
+.position-cell .pv { font-size: 0.95rem; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+.position-cell .pl { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted, #94a3b8); }
+
+/* ---------- Botones de periodo/modo (por si style.css no los define) ---------- */
+.period-buttons { display: inline-flex; gap: 0.25rem; }
+.period-btn {
+    background: transparent;
+    border: 1px solid var(--border, rgba(148,163,184,0.2));
+    color: var(--text-muted, #94a3b8);
+    border-radius: 7px;
+    padding: 0.25rem 0.55rem;
+    font-size: 0.7rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+.period-btn:hover { color: var(--text, #e2e8f0); border-color: var(--accent, #6366f1); }
+.period-btn.active { background: var(--accent, #6366f1); color: #fff; border-color: var(--accent, #6366f1); }
+
+/* ---------- Gestionar cartera (formulario) ---------- */
+.gestion-form { max-width: 100%; }
+.gestion-table input[type="number"],
+.gestion-table input[type="date"],
+.gestion-table select {
+    width: 100%;
+    max-width: 130px;
+    padding: 0.35rem 0.5rem;
+    border-radius: 7px;
+    border: 1px solid var(--border, rgba(148,163,184,0.25));
+    background: var(--bg-card, rgba(255,255,255,0.04));
+    color: var(--text, #e2e8f0);
+    font-size: 0.8rem;
+}
+.gestion-save-bar {
+    position: sticky;
+    bottom: 1rem;
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.6rem;
+    padding: 0.75rem 1rem;
+    border-radius: 12px;
+    background: var(--bg-card, #111827);
+    border: 1px solid var(--border, rgba(148,163,184,0.2));
+    box-shadow: 0 8px 30px rgba(0,0,0,0.35);
+    margin-top: 1rem;
+}
+.flash-ok  { padding: 0.7rem 1rem; border-radius: 10px; background: rgba(16,185,129,0.12); border: 1px solid rgba(16,185,129,0.4); color: #10b981; font-size: 0.85rem; margin-bottom: 1rem; }
+.flash-err { padding: 0.7rem 1rem; border-radius: 10px; background: rgba(239,68,68,0.10); border: 1px solid rgba(239,68,68,0.4); color: #ef4444; font-size: 0.85rem; margin-bottom: 1rem; }
+
+/* ============================================================
+   RESPONSIVE v3
+   ============================================================ */
+@media (max-width: 1200px) {
+    .dashboard-grid-v3 { grid-template-columns: repeat(3, 1fr); }
+    .risk-grid { grid-template-columns: repeat(3, 1fr); }
+    .position-grid { grid-template-columns: repeat(3, 1fr); }
+}
+
+@media (max-width: 760px) {
+    .dashboard-grid-v3 { grid-template-columns: repeat(2, 1fr); }
+    .alerts-grid { grid-template-columns: 1fr; }
+    .risk-grid { grid-template-columns: repeat(2, 1fr); }
+    .position-grid { grid-template-columns: repeat(2, 1fr); }
+    .donut-center-value { font-size: 1.05rem; }
+}
+
+@media (max-width: 480px) {
+    .dashboard-grid-v3 { grid-template-columns: 1fr 1fr; }
+    .dashboard-grid-v3 .card { padding: 0.75rem; }
+    .dashboard-grid-v3 .card-value { font-size: 1.05rem; }
+    .risk-grid { grid-template-columns: 1fr 1fr; }
+    .risk-value { font-size: 1.05rem; }
+    .period-buttons { flex-wrap: wrap; }
+    .alert-item { padding: 0.6rem 0.7rem; }
+}

@@ -1,16 +1,22 @@
-# Archivos de configuración con contraseñas
+# Configuración sensible (credenciales y claves API)
 config.php
-.env
+config_api.php
+
+# Directorio de caché interna y cookies
+private_cache/
+*.tmp
 *.log
 
-# Archivos de sistema
-.DS_Store
-Thumbs.db
+# Datos de caché de producción y volcados generados
+cache_data.json
+ref_live_data.json
+prod_live_page.html
 
-# SQL dumps con datos sensibles
+# Backups locales
+*.backup.*
+*.bak
+
+# Volcados SQL locales: solo se versiona el dump de referencia del esquema
 *.sql
 !sql/upgrade_schema.sql
-
-# Directorios de IDE
-.idea/
-.vscode/
+!if0_37663314_acciones_glm5.sql
