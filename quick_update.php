@@ -1,6 +1,8 @@
 <?php
-// quick_update.php — Batch stock update endpoint (single request per ticker)
-// Fetches prices for all portfolio tickers in one call, updates DB + cache
+// quick_update.php — Batch stock update endpoint
+// v4: una sola petición batch a Yahoo spark para todos los tickers.
+//     Si spark falla o falta algún símbolo, se usa el método antiguo por ticker.
+//     ?legacy=1 fuerza el método antiguo (1 petición de 1 año + 1 de 1 día por ticker).
 require_once 'config.php';
 date_default_timezone_set('Europe/Madrid');
 header('Content-Type: application/json; charset=utf-8');
@@ -74,7 +76,33 @@ function readCache($cacheFile, $maxAge) {
 
 function writeCache($cacheFile, $data) {
     $data['_cached_at'] = date('Y-m-d H:i:s');
-    file_put_contents($cacheFile, json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+    // JSON compacto: el caché pasa de ~2 MB a ~80 KB y se escribe mucho más rápido.
+    $json = json_encode($data, JSON_UNESCAPED_UNICODE);
+    if ($json === false) return false;
+    // Escritura atómica: evita que index.php lea un JSON a medio escribir.
+    $tmp = $cacheFile . '.' . getmypid() . '.tmp';
+    if (file_put_contents($tmp, $json, LOCK_EX) === false) return false;
+    if (@rename($tmp, $cacheFile)) return true;
+    @unlink($tmp);
+    return file_put_contents($cacheFile, $json, LOCK_EX) !== false;
+}
+
+// Deja solo los campos que consume el frontend. Evita enviar 3 copias del
+// historial de cada acción en cada actualización.
+function lightenStock($stock) {
+    if (!is_array($stock)) return [];
+    $out = [];
+    $keys = [
+        'price', 'previous_close', 'high52', 'low52',
+        'rsi_14', 'sma_20', 'sma_50', 'volatilidad',
+        'tech_score', 'tech_signal', 'high', 'low', 'close_2025'
+    ];
+    foreach ($keys as $key) {
+        if (array_key_exists($key, $stock)) {
+            $out[$key] = $stock[$key];
+        }
+    }
+    return $out;
 }
 
 // ==========================================
@@ -83,8 +111,12 @@ function writeCache($cacheFile, $data) {
 
 // Accept tickers from query param or fetch all from DB
 $requestedTickers = isset($_GET['tickers']) ? explode(',', $_GET['tickers']) : [];
+$requestedTickers = array_values(array_filter(array_map('trim', $requestedTickers), function ($t) {
+    return $t !== '';
+}));
 $forceRefresh = isset($_GET['force']);
 $includeIbex = isset($_GET['ibex']) || empty($requestedTickers);
+$useSpark = !isset($_GET['legacy']);
 
 // If no tickers specified, get all from DB
 if (empty($requestedTickers)) {
@@ -99,32 +131,30 @@ if (empty($requestedTickers)) {
 $isMarket = isMarketOpen();
 $effectiveMaxAge = $isMarket ? $CACHE_MAX_AGE : 86400 * 7; // Fuera de horario la caché se preserva
 
-if (!$forceRefresh) {
-    $cached = readCache($CACHE_FILE, $effectiveMaxAge);
-    if ($cached && !empty($cached['stocks'])) {
-        // Filter cached data to only requested tickers
-        $response = [
-            'source' => 'cache',
-            'cache_age' => $cached['_cache_age'] ?? 0,
-            'market_open' => $isMarket,
-            'timestamp' => $cached['_cached_at'] ?? date('Y-m-d H:i:s'),
-            'stocks' => [],
-        ];
-        foreach ($requestedTickers as $t) {
-            if (isset($cached['stocks'][$t])) {
-                $response['stocks'][$t] = $cached['stocks'][$t];
-            }
+// Una sola lectura del caché: sirve para el hit de caché y para preservar
+// portfolio_history / ibex_history al escribir el nuevo caché.
+$cached = readCache($CACHE_FILE, PHP_INT_MAX);
+$cacheAge = isset($cached['_cache_age']) ? (int)$cached['_cache_age'] : PHP_INT_MAX;
+
+if (!$forceRefresh && $cached && $cacheAge <= $effectiveMaxAge && !empty($cached['stocks'])) {
+    // Filter cached data to only requested tickers
+    $response = [
+        'source' => 'cache',
+        'cache_age' => $cacheAge,
+        'market_open' => $isMarket,
+        'timestamp' => $cached['_cached_at'] ?? date('Y-m-d H:i:s'),
+        'stocks' => [],
+    ];
+    foreach ($requestedTickers as $t) {
+        if (isset($cached['stocks'][$t])) {
+            $response['stocks'][$t] = lightenStock($cached['stocks'][$t]);
         }
-        // If IBEX requested and available in cache
-        if ($includeIbex && isset($cached['ibex'])) {
-            $response['ibex'] = $cached['ibex'];
-        }
-        $response['portfolio_history'] = $cached['portfolio_history'] ?? [];
-        $response['ibex_history'] = $cached['ibex_history'] ?? [];
-        $response['all_stocks_history'] = $cached['all_stocks_history'] ?? [];
-        echo json_encode($response);
-        exit;
     }
+    if ($includeIbex && isset($cached['ibex'])) {
+        $response['ibex'] = $cached['ibex'];
+    }
+    echo json_encode($response);
+    exit;
 }
 
 // If market is closed and we have DB data (only fallback if cache didn't exist)
@@ -163,60 +193,31 @@ if (!file_exists($cookieJar) || filesize($cookieJar) === 0) {
     curl_close($ch);
 }
 
-// ==========================================
-// BATCH QUOTES FETCH (PREVENT DELAYS / NULL DATA)
-// ==========================================
 $batchTickers = $requestedTickers;
-if ($includeIbex && !in_array('^IBEX', $batchTickers)) {
+if ($includeIbex && !in_array('^IBEX', $batchTickers, true)) {
     $batchTickers[] = '^IBEX';
-}
-$batchTickersClean = array_map('urlencode', $batchTickers);
-$symbolsStr = implode(',', $batchTickersClean);
-
-$quoteData = [];
-if (!empty($symbolsStr)) {
-    $quoteUrl = "https://query1.finance.yahoo.com/v7/finance/quote?symbols={$symbolsStr}";
-    $ch = curl_init($quoteUrl);
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_COOKIEFILE => $cookieJar,
-        CURLOPT_HTTPHEADER => [
-            'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept: application/json',
-            'Referer: https://finance.yahoo.com/',
-        ],
-        CURLOPT_FOLLOWLOCATION => true,
-        CURLOPT_SSL_VERIFYPEER => false,
-        CURLOPT_TIMEOUT => 10,
-    ]);
-    $quoteResponse = curl_exec($ch);
-    curl_close($ch);
-    
-    if ($quoteResponse) {
-        $quoteJson = json_decode($quoteResponse, true);
-        $quoteResults = $quoteJson['quoteResult']['result'] ?? [];
-        foreach ($quoteResults as $q) {
-            $sym = $q['symbol'] ?? '';
-            if ($sym) {
-                $quoteData[$sym] = [
-                    'price' => $q['regularMarketPrice'] ?? 0,
-                    'previous_close' => $q['regularMarketPreviousClose'] ?? 0,
-                ];
-            }
-        }
-    }
 }
 
 $stocks = [];
 $errors = [];
+$sparkData = [];
 
-// 1. Descarga de cotizaciones en memoria
+// 1. Una sola petición batch: precios + historial diario de todos los tickers.
+if ($useSpark && !empty($batchTickers)) {
+    $sparkData = fetchSparkBatch($batchTickers, $cookieJar);
+}
+
+// 2. Fallback por ticker solo para los símbolos que spark no haya devuelto.
 foreach ($requestedTickers as $ticker) {
     $ticker = trim($ticker);
     if (empty($ticker) || $ticker === '^IBEX') continue;
 
-    $realtime = $quoteData[$ticker] ?? null;
-    $data = fetchQuick($ticker, $cookieJar, $realtime);
+    if (isset($sparkData[$ticker])) {
+        $stocks[$ticker] = $sparkData[$ticker];
+        continue;
+    }
+
+    $data = fetchQuick($ticker, $cookieJar, null);
     if ($data) {
         $stocks[$ticker] = $data;
     } else {
@@ -227,11 +228,14 @@ foreach ($requestedTickers as $ticker) {
 // IBEX35
 $ibexData = null;
 if ($includeIbex) {
-    $realtimeIbex = $quoteData['^IBEX'] ?? null;
-    $ibexData = fetchQuick('^IBEX', $cookieJar, $realtimeIbex);
+    if (isset($sparkData['^IBEX'])) {
+        $ibexData = $sparkData['^IBEX'];
+    } else {
+        $ibexData = fetchQuick('^IBEX', $cookieJar, null);
+    }
 }
 
-// 2. Transacción PDO atómica ultrarrápida (todos los UPDATEs en milisegundos)
+// 3. Transacción PDO atómica ultrarrápida (todos los UPDATEs en milisegundos)
 try {
     $pdo->beginTransaction();
     foreach ($stocks as $ticker => $data) {
@@ -248,15 +252,19 @@ try {
     $dbErrors[] = "Transacción revertida: " . $e->getMessage();
 }
 
-// Build response
+// Build response (solo precios y datos técnicos; sin historiales)
 $response = [
     'source' => 'yahoo',
-    'market_open' => isMarketOpen(),
+    'market_open' => $isMarket,
     'timestamp' => date('Y-m-d H:i:s'),
-    'stocks' => $stocks,
+    'stocks' => [],
     'errors' => $errors,
     'db_errors' => $dbErrors,
 ];
+foreach ($stocks as $ticker => $data) {
+    $response['stocks'][$ticker] = lightenStock($data);
+}
+
 if ($ibexData) {
     $response['ibex'] = [
         'price' => $ibexData['price'],
@@ -269,8 +277,7 @@ if ($ibexData) {
 }
 
 // Preservar y actualizar snapshot de hoy en portfolio_history
-$prevCache = readCache($CACHE_FILE, 9999999);
-$portfolioHistory = $prevCache['portfolio_history'] ?? [];
+$portfolioHistory = $cached['portfolio_history'] ?? [];
 
 $totalValHoy = 0;
 try {
@@ -302,12 +309,21 @@ if ($totalValHoy > 0 && !empty($portfolioHistory)) {
         ];
     }
 }
-$response['portfolio_history'] = $portfolioHistory;
-$response['ibex_history'] = $prevCache['ibex_history'] ?? [];
-$response['all_stocks_history'] = $prevCache['all_stocks_history'] ?? [];
 
-// Write cache
-writeCache($CACHE_FILE, $response);
+// Write compact cache (sin historiales duplicados; index.php solo usa precios,
+// portfolio_history e ibex_history del caché).
+$cacheData = [
+    'source' => 'yahoo',
+    'market_open' => $isMarket,
+    'timestamp' => date('Y-m-d H:i:s'),
+    'stocks' => $response['stocks'],
+    'ibex' => $response['ibex'] ?? null,
+    'portfolio_history' => $portfolioHistory,
+    'ibex_history' => $cached['ibex_history'] ?? [],
+    'errors' => $errors,
+    'db_errors' => $dbErrors,
+];
+writeCache($CACHE_FILE, $cacheData);
 
 echo json_encode($response);
 
@@ -315,6 +331,200 @@ echo json_encode($response);
 // FUNCTIONS
 // ==========================================
 
+/**
+ * Una sola petición batch a Yahoo spark.
+ * Devuelve [symbol => datos] con el mismo formato que fetchQuick().
+ * spark no da high/low históricos: se conservan los existentes en mergeHistories().
+ */
+function fetchSparkBatch($tickers, $cookieJar) {
+    $tickers = array_values(array_unique(array_filter(array_map('trim', $tickers), function ($t) {
+        return $t !== '';
+    })));
+    if (empty($tickers)) return [];
+
+    $symbolsStr = implode(',', array_map('rawurlencode', $tickers));
+    $url = "https://query1.finance.yahoo.com/v7/finance/spark?symbols={$symbolsStr}&range=1y&interval=1d";
+
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_COOKIEFILE => $cookieJar,
+        CURLOPT_COOKIEJAR => $cookieJar,
+        CURLOPT_HTTPHEADER => [
+            'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept: application/json',
+            'Accept-Language: en-US,en;q=0.9,es;q=0.8',
+            'Referer: https://finance.yahoo.com/',
+        ],
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_TIMEOUT => 15,
+        CURLOPT_ENCODING => 'gzip, deflate',
+    ]);
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($httpCode !== 200 || !$response) return [];
+
+    $json = json_decode($response, true);
+    $results = $json['spark']['result'] ?? [];
+    if (!is_array($results)) return [];
+
+    $out = [];
+    foreach ($results as $r) {
+        $symbol = $r['symbol'] ?? '';
+        $resp = $r['response'][0] ?? null;
+        if (!$symbol || !is_array($resp)) continue;
+
+        $meta = $resp['meta'] ?? [];
+        $timestamps = $resp['timestamp'] ?? [];
+        $closes = $resp['indicators']['quote'][0]['close'] ?? [];
+        if (!is_array($timestamps) || !is_array($closes)) continue;
+
+        $history = [];
+        foreach ($timestamps as $i => $ts) {
+            $close = $closes[$i] ?? null;
+            if ($close !== null && is_numeric($close) && (float)$close > 0) {
+                $history[] = [
+                    'x' => (int)$ts,
+                    'y' => round((float)$close, 4),
+                ];
+            }
+        }
+        if (empty($history)) continue;
+
+        $price = (float)($meta['regularMarketPrice'] ?? 0);
+        if ($price <= 0) {
+            $price = (float)$history[count($history) - 1]['y'];
+        }
+
+        // spark no incluye previousClose en el meta; se deriva de la variación
+        // diaria (exacta) y, si no está, del penúltimo cierre.
+        $previousClose = 0.0;
+        if (isset($meta['previousClose']) && (float)$meta['previousClose'] > 0) {
+            $previousClose = (float)$meta['previousClose'];
+        }
+        if ($previousClose <= 0 && isset($meta['regularMarketChangePercent']) && is_numeric($meta['regularMarketChangePercent'])) {
+            $chg = (float)$meta['regularMarketChangePercent'];
+            if ($chg > -100) {
+                $previousClose = $price / (1 + ($chg / 100));
+            }
+        }
+        if ($previousClose <= 0 && count($history) >= 2) {
+            $previousClose = (float)$history[count($history) - 2]['y'];
+        }
+
+        // high/low del día para el último punto (el resto se conserva del historial existente)
+        $lastIdx = count($history) - 1;
+        $dayHigh = (float)($meta['regularMarketDayHigh'] ?? 0);
+        $dayLow = (float)($meta['regularMarketDayLow'] ?? 0);
+        if ($dayHigh > 0) $history[$lastIdx]['h'] = round($dayHigh, 4);
+        if ($dayLow > 0) $history[$lastIdx]['l'] = round($dayLow, 4);
+
+        $high52 = (float)($meta['fiftyTwoWeekHigh'] ?? 0);
+        $low52 = (float)($meta['fiftyTwoWeekLow'] ?? 0);
+
+        $out[$symbol] = buildStockData($price, $previousClose, $history, $high52, $low52);
+    }
+
+    return $out;
+}
+
+/**
+ * Cálculos técnicos compartidos por spark y por el fallback por ticker.
+ */
+function buildStockData($price, $previousClose, array $history, $high52 = 0, $low52 = 0) {
+    $price = (float)$price;
+    $previousClose = (float)$previousClose;
+
+    $priceList = [];
+    foreach ($history as $p) {
+        if (isset($p['y']) && is_numeric($p['y']) && (float)$p['y'] > 0) {
+            $priceList[] = (float)$p['y'];
+        }
+    }
+    $n = count($priceList);
+
+    $sma20 = null;
+    if ($n >= 20) {
+        $slice20 = array_slice($priceList, -20);
+        $sma20 = array_sum($slice20) / 20;
+    }
+    $sma50 = null;
+    if ($n >= 50) {
+        $slice50 = array_slice($priceList, -50);
+        $sma50 = array_sum($slice50) / 50;
+    }
+
+    $rsi = null;
+    if ($n >= 15) {
+        $gains = 0; $losses = 0;
+        for ($i = $n - 14; $i < $n; $i++) {
+            $diff = $priceList[$i] - $priceList[$i - 1];
+            if ($diff > 0) $gains += $diff; else $losses -= $diff;
+        }
+        $avgGain = $gains / 14;
+        $avgLoss = $losses / 14;
+        $rsi = ($avgLoss == 0) ? 100 : (100 - (100 / (1 + ($avgGain / $avgLoss))));
+    }
+
+    $vol = null;
+    if ($n >= 30) {
+        $slice30 = array_slice($priceList, -30);
+        $rets = [];
+        for ($i = 1; $i < count($slice30); $i++) {
+            if ($slice30[$i - 1] > 0) {
+                $rets[] = ($slice30[$i] - $slice30[$i - 1]) / $slice30[$i - 1];
+            }
+        }
+        if (!empty($rets)) {
+            $mean = array_sum($rets) / count($rets);
+            $variance = 0;
+            foreach ($rets as $r) $variance += pow($r - $mean, 2);
+            $vol = sqrt($variance / count($rets)) * sqrt(252) * 100;
+        }
+    }
+
+    $techScore = 0;
+    if ($rsi !== null) {
+        if ($rsi < 30) $techScore += 20;
+        else if ($rsi > 70) $techScore -= 20;
+    }
+    if ($price > 0 && $sma20 && $sma50) {
+        if ($price > $sma20 && $sma20 > $sma50) $techScore += 15;
+        else if ($price < $sma20 && $sma20 < $sma50) $techScore -= 15;
+    }
+    $techSignal = 'MANTENER';
+    if ($techScore >= 15) $techSignal = 'COMPRA';
+    else if ($techScore >= 5) $techSignal = 'COMPRA MOD.';
+    else if ($techScore <= -15) $techSignal = 'VENTA';
+    else if ($techScore <= -5) $techSignal = 'PRECAUCIÓN';
+
+    $high52 = (float)$high52;
+    $low52 = (float)$low52;
+    if ($high52 <= 0 && !empty($priceList)) $high52 = max($priceList);
+    if ($low52 <= 0 && !empty($priceList)) $low52 = min($priceList);
+
+    return [
+        'price' => round($price, 4),
+        'previous_close' => round($previousClose, 4),
+        'high52' => round($high52, 4),
+        'low52' => round($low52, 4),
+        'rsi_14' => $rsi !== null ? round($rsi, 2) : null,
+        'sma_20' => $sma20 !== null ? round($sma20, 4) : null,
+        'sma_50' => $sma50 !== null ? round($sma50, 4) : null,
+        'volatilidad' => $vol !== null ? round($vol, 2) : null,
+        'tech_score' => $techScore,
+        'tech_signal' => $techSignal,
+        'history' => $history,
+    ];
+}
+
+/**
+ * Fallback antiguo: chart de 1 año + chart de 1 día por ticker.
+ * Solo se ejecuta si spark falla o con ?legacy=1.
+ */
 function fetchQuick($ticker, $cookieJar, $realtime = null) {
     $url = "https://query1.finance.yahoo.com/v8/finance/chart/{$ticker}?range=1y&interval=1d";
 
@@ -392,77 +602,10 @@ function fetchQuick($ticker, $cookieJar, $realtime = null) {
         $previousClose = $history[count($history) - 2]['y'];
     }
 
-    $priceList = array_map(function($p) { return $p['y']; }, $history);
-    $n = count($priceList);
-
-    $sma20 = null;
-    if ($n >= 20) {
-        $slice20 = array_slice($priceList, -20);
-        $sma20 = array_sum($slice20) / 20;
-    }
-    $sma50 = null;
-    if ($n >= 50) {
-        $slice50 = array_slice($priceList, -50);
-        $sma50 = array_sum($slice50) / 50;
-    }
-    $rsi = null;
-    if ($n >= 14) {
-        $gains = 0; $losses = 0;
-        for ($i = $n - 14; $i < $n; $i++) {
-            $diff = $priceList[$i] - $priceList[$i - 1];
-            if ($diff > 0) $gains += $diff; else $losses -= $diff;
-        }
-        $avgGain = $gains / 14;
-        $avgLoss = $losses / 14;
-        $rsi = ($avgLoss == 0) ? 100 : (100 - (100 / (1 + ($avgGain / $avgLoss))));
-    }
-    $vol = null;
-    if ($n >= 30) {
-        $slice30 = array_slice($priceList, -30);
-        $rets = [];
-        for ($i = 1; $i < count($slice30); $i++) {
-            $rets[] = ($slice30[$i] - $slice30[$i-1]) / $slice30[$i-1];
-        }
-        $mean = array_sum($rets) / count($rets);
-        $variance = 0;
-        foreach ($rets as $r) $variance += pow($r - $mean, 2);
-        $vol = sqrt($variance / count($rets)) * sqrt(252) * 100;
-    }
-
-    $techScore = 0;
-    if ($rsi !== null) {
-        if ($rsi < 30) $techScore += 20;
-        else if ($rsi > 70) $techScore -= 20;
-    }
-    if ($price > 0 && $sma20 && $sma50) {
-        if ($price > $sma20 && $sma20 > $sma50) $techScore += 15;
-        else if ($price < $sma20 && $sma20 < $sma50) $techScore -= 15;
-    }
-    $techSignal = 'MANTENER';
-    if ($techScore >= 15) $techSignal = 'COMPRA';
-    else if ($techScore >= 5) $techSignal = 'COMPRA MOD.';
-    else if ($techScore <= -15) $techSignal = 'VENTA';
-    else if ($techScore <= -5) $techSignal = 'PRECAUCIÓN';
-
     $high52 = (float)($meta['fiftyTwoWeekHigh'] ?? 0);
     $low52 = (float)($meta['fiftyTwoWeekLow'] ?? 0);
-    if ($high52 <= 0 && !empty($priceList)) $high52 = max($priceList);
-    if ($low52 <= 0 && !empty($priceList)) $low52 = min($priceList);
 
-    return [
-        'price' => $price,
-        'previous_close' => $previousClose,
-        'high52' => $high52,
-        'low52' => $low52,
-        'rsi_14' => $rsi,
-        'sma_20' => $sma20,
-        'sma_50' => $sma50,
-        'volatilidad' => $vol,
-        'tech_score' => $techScore,
-        'tech_signal' => $techSignal,
-        'history' => $history,
-        'history_json' => json_encode($history),
-    ];
+    return buildStockData($price, $previousClose, $history, $high52, $low52);
 }
 
 function mergeHistories($existingJson, $newHistory) {
@@ -481,6 +624,12 @@ function mergeHistories($existingJson, $newHistory) {
     foreach ($newHistory as $p) {
         if (isset($p['x']) && isset($p['y'])) {
             $day = floor($p['x'] / 86400) * 86400;
+            // spark solo trae cierres; conservar high/low del punto existente
+            // para no perderlos al fusionar el mismo día.
+            if (isset($map[$day])) {
+                if (!isset($p['h']) && isset($map[$day]['h'])) $p['h'] = $map[$day]['h'];
+                if (!isset($p['l']) && isset($map[$day]['l'])) $p['l'] = $map[$day]['l'];
+            }
             $map[$day] = $p;
         }
     }
@@ -499,6 +648,7 @@ function updateDB($pdo, $ticker, $data) {
 
         $mergedHistory = mergeHistories($existingHistJson, $data['history'] ?? []);
         $historyJson = json_encode($mergedHistory);
+        if ($historyJson === false) $historyJson = '[]';
 
         // IMPORTANTE: con PDO::ATTR_EMULATE_PREPARES = false (config.php) un mismo
         // placeholder nombrado NO puede repetirse en la consulta: MySQL/PDO lanzan
@@ -542,7 +692,7 @@ function updateDB($pdo, $ticker, $data) {
             ':ticker' => $ticker,
             ':ticker2' => $ticker,
         ]);
-        
+
         if ($stmt->rowCount() === 0) {
             $dbErrors[] = "No se afectó ninguna fila para el ticker: $ticker. Verifica si existe en la BD.";
         }
@@ -565,7 +715,6 @@ function buildResponseFromDB($pdo, $tickers, $includeIbex) {
             'previous_close' => (float)$row['precio_cierre_anterior'],
             'high' => (float)($lastPoint['h'] ?? 0),
             'low' => (float)($lastPoint['l'] ?? 0),
-            'history' => $history,
         ];
     }
 
