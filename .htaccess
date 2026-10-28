@@ -26,3 +26,9 @@
     Order Deny,Allow
     Deny from all
 </FilesMatch>
+
+# Bloquear el archivo de estado del despliegue automático
+<FilesMatch "^\.ftp-deploy-sync-state\.json$">
+    Order Deny,Allow
+    Deny from all
+</FilesMatch>
