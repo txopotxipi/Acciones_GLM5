@@ -2,6 +2,19 @@
 config.php
 config_api.php
 
+# Config y BD de pruebas locales (ronda 11: volcado real exportado a SQLite)
+config.local_real.php
+config.local_test.php
+local_db_real.sqlite
+local_test.sqlite
+
+# Archivado de ficheros obsoletos (ronda 10)
+_legacy/
+
+# Notas y logs locales
+eror.txt
+tarea.txt
+
 # Directorio de caché interna y cookies
 private_cache/
 *.tmp
@@ -22,3 +35,11 @@ prod_live_page.html
 # Volcados SQL locales: solo se versiona el esquema canónico
 *.sql
 !sql/schema.sql
+
+# Capturas y artefactos de QA visual local
+_qa/
+.playwright-mcp/
+
+# BD y configuración de pruebas locales
+local_test.sqlite
+config.local_test.php

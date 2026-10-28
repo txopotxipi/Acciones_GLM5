@@ -4,31 +4,29 @@
 //     Si spark falla o falta algún símbolo, se usa el método antiguo por ticker.
 //     ?legacy=1 fuerza el método antiguo (1 petición de 1 año + 1 de 1 día por ticker).
 require_once 'config.php';
+require_once 'lib_http.php';
 date_default_timezone_set('Europe/Madrid');
 header('Content-Type: application/json; charset=utf-8');
-header('Access-Control-Allow-Origin: *');
 set_time_limit(60);
 
 // VALIDACIÓN DE SEGURIDAD (Compatible con Apache / InfinityFree y same-origin)
+// same-origin estricto: solo cabecera Fetch-Metadata 'same-origin' o un
+// Referer cuyo host coincide exactamente con el host de la petición.
 $headers = function_exists('getallheaders') ? getallheaders() : [];
 $apiKey = $headers['X-Api-Key'] ?? $headers['x-api-key'] ?? $_SERVER['HTTP_X_API_KEY'] ?? $_GET['key'] ?? $_POST['key'] ?? '';
 
-$isSameOrigin = false;
-if (isset($_SERVER['HTTP_SEC_FETCH_SITE']) && in_array($_SERVER['HTTP_SEC_FETCH_SITE'], ['same-origin', 'same-site', 'none'])) {
-    $isSameOrigin = true;
-}
-if (!empty($_SERVER['HTTP_REFERER']) && !empty($_SERVER['HTTP_HOST'])) {
-    if (strpos($_SERVER['HTTP_REFERER'], $_SERVER['HTTP_HOST']) !== false) {
+$isSameOrigin = isset($_SERVER['HTTP_SEC_FETCH_SITE']) && $_SERVER['HTTP_SEC_FETCH_SITE'] === 'same-origin';
+if (!$isSameOrigin && !empty($_SERVER['HTTP_REFERER']) && !empty($_SERVER['HTTP_HOST'])) {
+    $refHost = parse_url($_SERVER['HTTP_REFERER'], PHP_URL_HOST);
+    $reqHost = parse_url('http://' . (string)$_SERVER['HTTP_HOST'], PHP_URL_HOST);
+    if ($refHost !== null && $refHost !== false && $reqHost !== null && strcasecmp($refHost, $reqHost) === 0) {
         $isSameOrigin = true;
     }
 }
 
 if ($apiKey !== INTERNAL_API_KEY && !$isSameOrigin) {
-    $host = $_SERVER['HTTP_HOST'] ?? '';
-    if (empty($host) || (strpos($host, 'lovestoblog.com') === false && strpos($host, 'localhost') === false && strpos($host, '127.0.0.1') === false && strpos($host, 'x10.network') === false)) {
-        http_response_code(403);
-        die(json_encode(['error' => 'Forbidden']));
-    }
+    http_response_code(403);
+    die(json_encode(['error' => 'Forbidden']));
 }
 
 $dbErrors = [];
@@ -186,9 +184,8 @@ if (!file_exists($cookieJar) || filesize($cookieJar) === 0) {
             'Accept: text/html',
         ],
         CURLOPT_FOLLOWLOCATION => true,
-        CURLOPT_SSL_VERIFYPEER => false,
-        CURLOPT_TIMEOUT => 10,
     ]);
+    aplicar_ssl($ch);
     curl_exec($ch);
     curl_close($ch);
 }
@@ -357,10 +354,8 @@ function fetchSparkBatch($tickers, $cookieJar) {
             'Referer: https://finance.yahoo.com/',
         ],
         CURLOPT_FOLLOWLOCATION => true,
-        CURLOPT_SSL_VERIFYPEER => false,
-        CURLOPT_TIMEOUT => 15,
-        CURLOPT_ENCODING => 'gzip, deflate',
     ]);
+    aplicar_ssl($ch);
     $response = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
@@ -540,10 +535,8 @@ function fetchQuick($ticker, $cookieJar, $realtime = null) {
             'Referer: https://finance.yahoo.com/',
         ],
         CURLOPT_FOLLOWLOCATION => true,
-        CURLOPT_SSL_VERIFYPEER => false,
-        CURLOPT_TIMEOUT => 15,
-        CURLOPT_ENCODING => 'gzip, deflate',
     ]);
+    aplicar_ssl($ch);
     $response = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
@@ -584,9 +577,8 @@ function fetchQuick($ticker, $cookieJar, $realtime = null) {
             'Accept: application/json',
         ],
         CURLOPT_FOLLOWLOCATION => true,
-        CURLOPT_SSL_VERIFYPEER => false,
-        CURLOPT_TIMEOUT => 5,
     ]);
+    aplicar_ssl($ch);
     $res1d = curl_exec($ch1d);
     curl_close($ch1d);
 
@@ -652,17 +644,17 @@ function updateDB($pdo, $ticker, $data) {
 
         // IMPORTANTE: con PDO::ATTR_EMULATE_PREPARES = false (config.php) un mismo
         // placeholder nombrado NO puede repetirse en la consulta: MySQL/PDO lanzan
-        // "SQLSTATE[HY093]: Invalid parameter number". Por eso cada condición del IF
-        // usa un parámetro distinto (sufijo "c" = condición, "v" = valor).
+        // "SQLSTATE[HY093]: Invalid parameter number". Por eso cada condición del
+        // CASE usa un parámetro distinto (sufijo "c" = condición, "v" = valor).
         $sql = "UPDATE valores SET
             precio_actual = :p,
             precio_cierre_anterior = :pc,
-            fifty_two_week_high = IF(:h52c > 0, :h52v, fifty_two_week_high),
-            fifty_two_week_low = IF(:l52c > 0, :l52v, fifty_two_week_low),
-            rsi_14 = IF(:rsic IS NOT NULL, :rsiv, rsi_14),
-            sma_20 = IF(:sma20c IS NOT NULL, :sma20v, sma_20),
-            sma_50 = IF(:sma50c IS NOT NULL, :sma50v, sma_50),
-            volatilidad = IF(:volc IS NOT NULL, :volv, volatilidad),
+            fifty_two_week_high = CASE WHEN :h52c > 0 THEN :h52v ELSE fifty_two_week_high END,
+            fifty_two_week_low = CASE WHEN :l52c > 0 THEN :l52v ELSE fifty_two_week_low END,
+            rsi_14 = CASE WHEN :rsic IS NOT NULL THEN :rsiv ELSE rsi_14 END,
+            sma_20 = CASE WHEN :sma20c IS NOT NULL THEN :sma20v ELSE sma_20 END,
+            sma_50 = CASE WHEN :sma50c IS NOT NULL THEN :sma50v ELSE sma_50 END,
+            volatilidad = CASE WHEN :volc IS NOT NULL THEN :volv ELSE volatilidad END,
             tech_score = :ts_score,
             tech_signal = :ts_signal,
             history_json = :hist,

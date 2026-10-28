@@ -23,6 +23,14 @@ const fmtPct = (n, dec = 2) =>
     (n === null || n === undefined || isNaN(n)) ? '—' :
     (n >= 0 ? '+' : '') + Number(n).toLocaleString('es-ES', { minimumFractionDigits: dec, maximumFractionDigits: dec }) + '%';
 
+// Escapa HTML antes de interpolar texto en innerHTML. Imprescindible para
+// datos del DOM (p. ej. data-name): el navegador decodifica entidades al
+// leer el atributo, así que reinyectarlo sin escapar reintroduciría HTML
+// crudo (inyección de XSS almacenado).
+const esc = (s) =>
+    String(s ?? '').replace(/[&<>"']/g, (m) =>
+        ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+
 const fmtCompact = (n) => {
     if (n === null || n === undefined || isNaN(n) || n === 0) return '—';
     if (n >= 1e12) return (n / 1e12).toFixed(2) + ' B';
@@ -987,7 +995,7 @@ function renderDiagnosis(o) {
 
     box.innerHTML = `
         <div style="display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap; margin-bottom:0.6rem;">
-            <h4 style="margin:0;">🎯 Diagnóstico: ${o.name}</h4>
+            <h4 style="margin:0;">🎯 Diagnóstico: ${esc(o.name)}</h4>
             <span class="signal-pill signal-${sigCls}">${signal}</span>
             <span class="text-muted" style="font-size:0.75rem;">Score técnico: ${score > 0 ? '+' : ''}${score}</span>
         </div>

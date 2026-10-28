@@ -6,6 +6,7 @@ date_default_timezone_set('Europe/Madrid');
 
 require_once 'config_api.php';
 require_once 'config.php';
+require_once 'lib_http.php';
 
 // VALIDACIÓN DE SEGURIDAD (Compatible con Apache / InfinityFree y same-origin)
 $headers = function_exists('getallheaders') ? getallheaders() : [];
@@ -559,8 +560,8 @@ foreach ($models as $model) {
             'Accept: application/json'
         ],
         CURLOPT_TIMEOUT => 60,
-        CURLOPT_SSL_VERIFYPEER => false
     ]);
+    aplicar_ssl($ch);
 
     $response = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);

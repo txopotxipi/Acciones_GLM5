@@ -3,7 +3,29 @@
 // Edita acciones, coste medio, fecha de compra y sector de cada valor.
 // Protección: define GESTION_PASSWORD en config.php para exigir contraseña.
 require_once 'config.php';
+
+// Sesión con atributos duros: HttpOnly (sin lectura via JS), SameSite=Lax (mitiga
+// CSRF en cross-site POST) y Secure cuando el sitio corre sobre HTTPS.
+$isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+    || (stripos($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '', 'https') !== false);
+session_set_cookie_params([
+    'lifetime' => 0,
+    'path'     => '/',
+    'httponly' => true,
+    'samesite' => 'Lax',
+    'secure'   => $isHttps,
+]);
 session_start();
+
+// Token CSRF para cualquier POST de esta página (login y guardado).
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+$csrfToken = $_SESSION['csrf_token'];
+$csrfFail = false;
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !hash_equals($csrfToken, (string)($_POST['csrf_token'] ?? ''))) {
+    $csrfFail = true; // POST rechazado: token ausente o manipulado
+}
 
 $sectoresDisponibles = [
     'Energía' => '#10b981', 'Telecomunicaciones' => '#3b82f6', 'Banca' => '#f59e0b',
@@ -12,17 +34,35 @@ $sectoresDisponibles = [
 ];
 
 // ---------- Autenticación opcional ----------
+// GESTION_PASSWORD admite dos formatos en config.php:
+//   · Hash moderno ($2y$ = bcrypt, $argon2* = argon2i/d): se valida con password_verify.
+//   · Texto plano (sin '$'): se compara con hash_equals (protección timing). Genera el
+//     hash con php -r "echo password_hash('tu_clave', PASSWORD_DEFAULT);" y pégalo en
+//     config.php para eliminar la clave en texto plano.
+function checkGestionPassword(string $input): bool
+{
+    if (!defined('GESTION_PASSWORD') || GESTION_PASSWORD === '') return false;
+    if (preg_match('/^\$(2y|2b|argon2[di])\$/', GESTION_PASSWORD)) {
+        return password_verify($input, GESTION_PASSWORD);
+    }
+    return hash_equals(GESTION_PASSWORD, $input);
+}
+
 $requiresAuth = defined('GESTION_PASSWORD') && GESTION_PASSWORD !== '';
 $authError = '';
 if ($requiresAuth) {
     if (isset($_GET['logout'])) { session_destroy(); header('Location: gestionar_cartera.php'); exit; }
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['gestion_password'])) {
-        if (hash_equals(GESTION_PASSWORD, $_POST['gestion_password'])) {
+        if ($csrfFail) {
+            $authError = 'Sesión expirada. Vuelve a intentarlo.';
+        } elseif (checkGestionPassword((string)$_POST['gestion_password'])) {
             $_SESSION['gestion_ok'] = true;
+            session_regenerate_id(true); // evita fijación de sesión post-login
             header('Location: gestionar_cartera.php');
             exit;
+        } else {
+            $authError = 'Contraseña incorrecta';
         }
-        $authError = 'Contraseña incorrecta';
     }
     if (empty($_SESSION['gestion_ok'])) {
         ?>
@@ -36,6 +76,7 @@ if ($requiresAuth) {
             <h2 style="margin-top:0;">🔒 Gestionar Cartera</h2>
             <?php if ($authError): ?><div class="flash-err"><?= htmlspecialchars($authError) ?></div><?php endif; ?>
             <form method="post">
+                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
                 <input type="password" name="gestion_password" placeholder="Contraseña" required autofocus
                     style="width:100%; padding:0.6rem; border-radius:8px; border:1px solid var(--border, rgba(148,163,184,0.25)); background:var(--bg-card, rgba(255,255,255,0.04)); color:inherit; margin-bottom:0.75rem;">
                 <button type="submit" class="btn btn-primary" style="width:100%;">Entrar</button>
@@ -50,7 +91,10 @@ if ($requiresAuth) {
 // ---------- Guardar cambios ----------
 $flash = ''; $flashType = 'ok';
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['guardar'])) {
-    try {
+    if ($csrfFail) {
+        $flash = '⚠️ Sesión expirada: cambios no guardados. Recarga la página e inténtalo de nuevo.';
+        $flashType = 'err';
+    } else try {
         $pdo->beginTransaction();
         $stmt = $pdo->prepare("UPDATE valores SET
             num_acciones = :acciones,
@@ -115,6 +159,7 @@ $valores = $pdo->query("SELECT * FROM valores WHERE ticker <> '^IBEX' ORDER BY (
 
     <div class="card gestion-form">
         <form method="post" id="form-gestion">
+            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
             <div class="table-scroll-wrapper">
                 <table class="gestion-table">
                     <thead>

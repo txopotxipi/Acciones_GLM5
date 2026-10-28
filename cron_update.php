@@ -4,6 +4,7 @@
 // Ejecución automática: .github/workflows/cron.yml (GitHub Actions + Playwright)
 // Seguridad: INTERNAL_API_KEY (?key= o cabecera X-Api-Key) o petición same-origin.
 require_once 'config.php';
+require_once 'lib_http.php';
 date_default_timezone_set('Europe/Madrid');
 
 header('Content-Type: application/json; charset=utf-8');
@@ -182,9 +183,8 @@ if (!file_exists($sharedCookieJar) || filesize($sharedCookieJar) === 0) {
             'Accept: text/html',
         ],
         CURLOPT_FOLLOWLOCATION => true,
-        CURLOPT_SSL_VERIFYPEER => false,
-        CURLOPT_TIMEOUT => 10,
     ]);
+    aplicar_ssl($ch);
     curl_exec($ch);
     curl_close($ch);
 }
@@ -234,18 +234,18 @@ foreach ($tickers as $row) {
             $sql = "UPDATE valores SET
                 precio_actual = :p,
                 precio_cierre_anterior = :pc,
-                trailing_pe = IF(:pe > 0, :pe2, trailing_pe),
-                target_mean_price = IF(:t > 0, :t2, target_mean_price),
-                dividend_yield = IF(:d > 0, :d2, dividend_yield),
-                fifty_two_week_high = IF(:h52 > 0, :h522, fifty_two_week_high),
-                fifty_two_week_low = IF(:l52 > 0, :l522, fifty_two_week_low),
+                trailing_pe = CASE WHEN :pe > 0 THEN :pe2 ELSE trailing_pe END,
+                target_mean_price = CASE WHEN :t > 0 THEN :t2 ELSE target_mean_price END,
+                dividend_yield = CASE WHEN :d > 0 THEN :d2 ELSE dividend_yield END,
+                fifty_two_week_high = CASE WHEN :h52 > 0 THEN :h522 ELSE fifty_two_week_high END,
+                fifty_two_week_low = CASE WHEN :l52 > 0 THEN :l522 ELSE fifty_two_week_low END,
                 history_json = :hist,
-                rsi_14 = IF(:has_rsi = 1, :rsi, rsi_14),
-                sma_20 = IF(:has_sma20 = 1, :sma20, sma_20),
-                sma_50 = IF(:has_sma50 = 1, :sma50, sma_50),
+                rsi_14 = CASE WHEN :has_rsi = 1 THEN :rsi ELSE rsi_14 END,
+                sma_20 = CASE WHEN :has_sma20 = 1 THEN :sma20 ELSE sma_20 END,
+                sma_50 = CASE WHEN :has_sma50 = 1 THEN :sma50 ELSE sma_50 END,
                 tech_score = :ts_score,
                 tech_signal = :ts_signal,
-                volatilidad = IF(:has_vol = 1, :volatilidad, volatilidad),
+                volatilidad = CASE WHEN :has_vol = 1 THEN :volatilidad ELSE volatilidad END,
                 ultima_actualizacion = :ts
                 WHERE ticker = :ticker OR ticker_yahoo = :ticker2";
 
@@ -407,9 +407,8 @@ function fetchYahooData($ticker, $cookieJar)
             'Accept: application/json',
         ],
         CURLOPT_FOLLOWLOCATION => true,
-        CURLOPT_SSL_VERIFYPEER => false,
-        CURLOPT_TIMEOUT => 15,
     ]);
+    aplicar_ssl($ch);
     $response = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
@@ -461,9 +460,8 @@ function fetchYahooData($ticker, $cookieJar)
                 'Accept: application/json',
             ],
             CURLOPT_FOLLOWLOCATION => true,
-            CURLOPT_SSL_VERIFYPEER => false,
-            CURLOPT_TIMEOUT => 5,
         ]);
+        aplicar_ssl($ch);
         $res1d = curl_exec($ch1d);
         curl_close($ch1d);
 
@@ -513,9 +511,8 @@ function fetchFundamentals($ticker, $cookieJar)
             'Accept: application/json',
         ],
         CURLOPT_FOLLOWLOCATION => true,
-        CURLOPT_SSL_VERIFYPEER => false,
-        CURLOPT_TIMEOUT => 15,
     ]);
+    aplicar_ssl($ch);
     $response = curl_exec($ch);
     curl_close($ch);
 

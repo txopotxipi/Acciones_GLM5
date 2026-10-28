@@ -2,6 +2,7 @@
 // ibex_update.php — Fetch IBEX35 server-side and save to DB
 // Called via AJAX from the frontend
 require_once 'config.php';
+require_once 'lib_http.php';
 date_default_timezone_set('Europe/Madrid');
 
 header('Content-Type: application/json; charset=utf-8');
@@ -21,9 +22,8 @@ curl_setopt_array($ch, [
         'Accept: text/html',
     ],
     CURLOPT_FOLLOWLOCATION => true,
-    CURLOPT_SSL_VERIFYPEER => false,
-    CURLOPT_TIMEOUT        => 15,
 ]);
+aplicar_ssl($ch);
 curl_exec($ch);
 curl_close($ch);
 
@@ -38,9 +38,8 @@ curl_setopt_array($ch, [
         'Accept: application/json',
     ],
     CURLOPT_FOLLOWLOCATION => true,
-    CURLOPT_SSL_VERIFYPEER => false,
-    CURLOPT_TIMEOUT        => 15,
 ]);
+aplicar_ssl($ch);
 $response = curl_exec($ch);
 $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 curl_close($ch);

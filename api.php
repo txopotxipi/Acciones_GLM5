@@ -1,18 +1,22 @@
 <?php
 // api.php — Endpoint de consulta individual con seguridad y validación
 require_once 'config.php';
+require_once 'lib_http.php';
 header('Content-Type: application/json; charset=utf-8');
 
 // VALIDACIÓN DE SEGURIDAD
+// same-origin estricto: solo cabecera Fetch-Metadata 'same-origin' o un
+// Referer cuyo host coincide exactamente con el host de la petición.
+// ('same-site' y 'none' NO cuentan: permitirían requests cruzadas y
+// navegaciones directas forjadas con curl).
 $headers = function_exists('getallheaders') ? getallheaders() : [];
 $apiKey = $headers['X-Api-Key'] ?? $headers['x-api-key'] ?? $_SERVER['HTTP_X_API_KEY'] ?? $_GET['key'] ?? $_POST['key'] ?? '';
 
-$isSameOrigin = false;
-if (isset($_SERVER['HTTP_SEC_FETCH_SITE']) && in_array($_SERVER['HTTP_SEC_FETCH_SITE'], ['same-origin', 'same-site', 'none'])) {
-    $isSameOrigin = true;
-}
-if (!empty($_SERVER['HTTP_REFERER']) && !empty($_SERVER['HTTP_HOST'])) {
-    if (strpos($_SERVER['HTTP_REFERER'], $_SERVER['HTTP_HOST']) !== false) {
+$isSameOrigin = isset($_SERVER['HTTP_SEC_FETCH_SITE']) && $_SERVER['HTTP_SEC_FETCH_SITE'] === 'same-origin';
+if (!$isSameOrigin && !empty($_SERVER['HTTP_REFERER']) && !empty($_SERVER['HTTP_HOST'])) {
+    $refHost = parse_url($_SERVER['HTTP_REFERER'], PHP_URL_HOST);
+    $reqHost = parse_url('http://' . (string)$_SERVER['HTTP_HOST'], PHP_URL_HOST);
+    if ($refHost !== null && $refHost !== false && $reqHost !== null && strcasecmp($refHost, $reqHost) === 0) {
         $isSameOrigin = true;
     }
 }
@@ -53,10 +57,8 @@ class StockAPI
             CURLOPT_HTTPHEADER => $headers,
             CURLOPT_COOKIEJAR => $cookieFile,
             CURLOPT_COOKIEFILE => $cookieFile,
-            CURLOPT_SSL_VERIFYPEER => false,
-            CURLOPT_TIMEOUT => 20,
-            CURLOPT_ENCODING => 'gzip, deflate'
         ]);
+        aplicar_ssl($ch);
 
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);

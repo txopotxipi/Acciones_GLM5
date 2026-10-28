@@ -7,6 +7,15 @@ header('Expires: Wed, 11 Jan 1984 05:00:00 GMT');
 
 require_once 'config.php';
 
+// json_ronda — elimina el ruido binario de coma flotante antes de serializar.// Sin esto, PHP emite literales tipo 323988.739999999990686… (14+ dígitos)
+// por cada float acumulado, inflando el HTML inline en cientos de KB.
+function roundFloats($x, $dec = 4) {
+    if (is_float($x)) return round($x, $dec);
+    if (is_int($x) || is_string($x) || $x === null || is_bool($x)) return $x;
+    if (is_array($x)) return array_map(fn($v) => roundFloats($v, $dec), $x);
+    return $x;
+}
+
 function cleanDbJson($raw) {
     if (empty($raw)) return '[]';
     if (is_array($raw)) return json_encode($raw, JSON_UNESCAPED_SLASHES);
@@ -18,7 +27,7 @@ function cleanDbJson($raw) {
     if (is_string($dec)) {
         $dec = json_decode(stripslashes($dec), true);
     }
-    return is_array($dec) ? json_encode($dec, JSON_UNESCAPED_SLASHES) : '[]';
+    return is_array($dec) ? json_encode(roundFloats($dec), JSON_UNESCAPED_SLASHES) : '[]';
 }
 
 $cachedData = [];
@@ -444,24 +453,8 @@ $min = (int) date('i');
 $dow = (int) date('N');
 $marketOpen = ($dow <= 5 && (($hora > 9 || ($hora == 9 && $min >= 0)) && ($hora < 17 || ($hora == 17 && $min <= 30))));
 
-// Manifest PWA embebido en Data URI (inmune a cortafuegos de hosting)
-$manifestJson = json_encode([
-    "name" => "Cartera Pro GLM5",
-    "short_name" => "Cartera Pro",
-    "description" => "Panel de control del portfolio financiero GLM5",
-    "start_url" => "index.php",
-    "scope" => "./",
-    "display" => "standalone",
-    "background_color" => "#0b0f19",
-    "theme_color" => "#6366f1",
-    "orientation" => "portrait-primary",
-    "icons" => [
-        ["src" => "icon-192.png", "sizes" => "192x192", "type" => "image/png", "purpose" => "any maskable"],
-        ["src" => "icon-512.png", "sizes" => "512x512", "type" => "image/png", "purpose" => "any maskable"]
-    ]
-], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-$manifestDataUri = 'data:application/manifest+json;base64,' . base64_encode($manifestJson);
 ?>
+
 <!DOCTYPE html>
 <html lang="es">
 
@@ -476,11 +469,12 @@ $manifestDataUri = 'data:application/manifest+json;base64,' . base64_encode($man
         rel="stylesheet">
     <link rel="stylesheet" href="style.css?v=4.0">
     <link rel="stylesheet" href="mejoras_v3.css?v=4.0">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.6.1/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
 
-    <!-- PWA & Favicon Support (Data URI para compatibilidad total) -->
-    <link rel="manifest" href="<?= $manifestDataUri ?>">
+    <!-- PWA & Favicon Support: manifiesto same-origin servido por manifest.php.
+         Un data: URI deja start_url/scope sin base URL y la PWA deja de ser instalable -->
+    <link rel="manifest" href="manifest.php?v=4.0">
     <link rel="icon" type="image/png" href="icon-192.png">
     <link rel="shortcut icon" href="favicon.ico">
     <meta name="theme-color" content="#6366f1">
@@ -859,7 +853,7 @@ $manifestDataUri = 'data:application/manifest+json;base64,' . base64_encode($man
                                 </td>
                                 <td class="text-right nowrap">
                                     <span class="mono" style="font-size:0.78rem;"><?= number_format($row['peso'], 1, ',', '.') ?>%</span>
-                                    <div class="weight-bar"><i style="width:<?= min(100, $row['peso']) ?>%; background:<?= $row['sector_color'] ?>;"></i></div>
+                                    <div class="weight-bar"><i style="width:<?= round(min(100, $row['peso']), 2) ?>%; background:<?= $row['sector_color'] ?>;"></i></div>
                                 </td>
                                 <td class="text-right">
                                     <span class="badge bg-<?= $clsDia ?>">
@@ -1047,8 +1041,8 @@ $manifestDataUri = 'data:application/manifest+json;base64,' . base64_encode($man
             return ['name' => $k, 'value' => round($v['valor'], 2), 'color' => $v['color']];
         }, array_keys($sectorDistrib), array_values($sectorDistrib))) ?>;
 
-        var PORTFOLIO_HISTORY = <?= json_encode($portfolioHistory) ?>;
-        var IBEX_HISTORY = <?= json_encode($ibexHistory) ?>;
+        var PORTFOLIO_HISTORY = <?= json_encode(roundFloats($portfolioHistory)) ?>;
+        var IBEX_HISTORY = <?= json_encode(roundFloats($ibexHistory)) ?>;
 
         var ALL_STOCKS_HISTORY = {};
         <?php foreach ($valores as $val): ?>

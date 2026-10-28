@@ -39,6 +39,14 @@ jobs:
           # config.php / config_api.php se quedan en el servidor y nunca se sobrescriben.
           exclude: |
             **/.git*
+            **/.freebuff/**
+            **/_qa/**
+            **/_legacy/**
+            **/*.sqlite
+            **/config.local_*.php
+            **/*backup*
+            **/INFORME_TECNICO.md
+            **/tarea.txt
             **/.git*/**
             **/.github/**
             **/.playwright-mcp/**

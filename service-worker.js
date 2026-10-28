@@ -1,11 +1,13 @@
-// service-worker.js — Cartera Pro GLM5 PWA Service Worker (v15)
-const CACHE_NAME = 'cartera-pro-glm5-v15';
+// service-worker.js — Cartera Pro GLM5 PWA Service Worker (v16)
+// v16: CDN de Chart.js y su adapter fijados a versión exacta (antes "/npm/chart.js"
+// flotaba a "latest" y un mayor a v5 rompería la app en silencio).
+const CACHE_NAME = 'cartera-pro-glm5-v16';
 const STATIC_ASSETS = [
     './favicon.ico',
     './icon-192.png',
     './icon-512.png',
-    'https://cdn.jsdelivr.net/npm/chart.js',
-    'https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js',
+    'https://cdn.jsdelivr.net/npm/chart.js@4.6.1/dist/chart.umd.min.js',
+    'https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js',
     'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap'
 ];
 
@@ -42,7 +44,6 @@ self.addEventListener('fetch', function(event) {
         url.includes('quick_update') ||
         url.includes('perplexity_report') ||
         url.includes('api.php') ||
-        url.includes('save_data.php') ||
         url.includes('yahoo.com') ||
         url.endsWith('/Acciones_GML5/') ||
         url.endsWith('/Acciones_GML5')) {
