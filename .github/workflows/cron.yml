@@ -1,0 +1,50 @@
+name: Actualizar cotizaciones (cron)
+
+on:
+  schedule:
+    # Cada 30 minutos, de 07:00 a 16:30 UTC, de lunes a viernes.
+    # Cubre la sesión bursátil española (09:00–17:30 CET/CEST).
+    - cron: '*/30 7-16 * * 1-5'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cron-cotizaciones
+  cancel-in-progress: false
+
+jobs:
+  update:
+    name: Ejecutar cron_update.php
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v7
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Cachear navegador de Playwright
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-1.55.0
+
+      - name: Instalar Playwright
+        run: |
+          npm init -y
+          npm install --no-audit --no-fund playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Ejecutar actualización
+        env:
+          SITE_URL: https://txopo13.lovestoblog.com/Acciones_GML5/
+          # Opcional: si defines el secreto INTERNAL_API_KEY, el cron se
+          # autentica con clave además de la comprobación same-origin.
+          CRON_API_KEY: ${{ secrets.INTERNAL_API_KEY }}
+        run: node .github/scripts/cron-runner.mjs

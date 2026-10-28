@@ -19,7 +19,6 @@ prod_live_page.html
 # Estado local del despliegue FTP
 .ftp-deploy-sync-state.json
 
-# Volcados SQL locales: solo se versiona el dump de referencia del esquema
+# Volcados SQL locales: solo se versiona el esquema canónico
 *.sql
-!sql/upgrade_schema.sql
-!if0_37663314_acciones_glm5.sql
+!sql/schema.sql

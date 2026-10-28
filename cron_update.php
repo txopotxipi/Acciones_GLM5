@@ -1,12 +1,42 @@
 <?php
-// cron_update.php — Yahoo Finance v8 data fetcher (optimized)
-// Run manually via browser: https://tudominio.com/cron_update.php
-// Or set as cron job on InfinityFree
+// cron_update.php — Actualización programada de cotizaciones (Yahoo Finance)
+// Ejecución manual: https://tudominio.com/cron_update.php
+// Ejecución automática: .github/workflows/cron.yml (GitHub Actions + Playwright)
+// Seguridad: INTERNAL_API_KEY (?key= o cabecera X-Api-Key) o petición same-origin.
 require_once 'config.php';
 date_default_timezone_set('Europe/Madrid');
 
 header('Content-Type: application/json; charset=utf-8');
+header('Cache-Control: no-store, max-age=0');
+header('X-Robots-Tag: noindex, nofollow');
 set_time_limit(120);
+
+// ==========================================
+// VALIDACIÓN DE SEGURIDAD
+// ==========================================
+$headers = function_exists('getallheaders') ? getallheaders() : [];
+$apiKey = $headers['X-Api-Key'] ?? $headers['x-api-key'] ?? $_SERVER['HTTP_X_API_KEY'] ?? $_GET['key'] ?? $_POST['key'] ?? '';
+if (!is_string($apiKey)) $apiKey = '';
+
+$isSameOrigin = false;
+if (isset($_SERVER['HTTP_SEC_FETCH_SITE']) && in_array($_SERVER['HTTP_SEC_FETCH_SITE'], ['same-origin', 'none'], true)) {
+    $isSameOrigin = true;
+}
+if (!empty($_SERVER['HTTP_REFERER']) && !empty($_SERVER['HTTP_HOST'])) {
+    if (strpos($_SERVER['HTTP_REFERER'], $_SERVER['HTTP_HOST']) !== false) {
+        $isSameOrigin = true;
+    }
+}
+
+$hasValidKey = defined('INTERNAL_API_KEY')
+    && INTERNAL_API_KEY !== ''
+    && hash_equals(INTERNAL_API_KEY, $apiKey);
+
+if (!$hasValidKey && !$isSameOrigin) {
+    http_response_code(403);
+    echo json_encode(['error' => 'Forbidden']);
+    exit;
+}
 
 // All tickers from portfolio  
 $stmt = $pdo->query("SELECT ticker, ticker_yahoo, history_json FROM valores");

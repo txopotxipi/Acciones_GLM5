@@ -392,7 +392,7 @@ foreach ($portfolioData as $row) {
     $nombre = $d['nombre'];
     $precio = $row['precio_actual'];
     $rsi = isset($d['rsi_14']) && $d['rsi_14'] !== null ? (float)$d['rsi_14'] : null;
-    $target = (float)($d['target_price'] ?? 0);
+    $target = (float)($d['target_mean_price'] ?? 0);
     $h52 = (float)($d['fifty_two_week_high'] ?? 0);
 
     if ($rsi !== null && $rsi > 70) {

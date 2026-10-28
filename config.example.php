@@ -8,7 +8,7 @@ $user = 'TU_USUARIO_MYSQL';
 $pass = 'TU_PASSWORD_MYSQL';
 $charset = 'utf8mb4';
 
-// CLAVE INTERNA PARA PROTEGER ENDPOINTS AJAX Y ACCESO A LA API
+// CLAVE INTERNA PARA PROTEGER ENDPOINTS AJAX, CRON Y ACCESO A LA API
 define('INTERNAL_API_KEY', 'TU_CLAVE_SECRETA_AQUI');
 
 $dsn = "mysql:host=$host;dbname=$db;charset=$charset";
