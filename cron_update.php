@@ -202,8 +202,6 @@ foreach ($tickers as $row) {
             $sql = "UPDATE valores SET
                 precio_actual = :p,
                 precio_cierre_anterior = :pc,
-                high_last = :h_last,
-                low_last = :l_last,
                 pe_ratio = IF(:pe > 0, :pe2, pe_ratio),
                 market_cap = IF(:cap > 0, :cap2, market_cap),
                 target_price = IF(:t > 0, :t2, target_price),
@@ -229,8 +227,6 @@ foreach ($tickers as $row) {
             $stmt->execute([
                 ':p' => $data['price'],
                 ':pc' => $data['previous_close'],
-                ':h_last' => $data['high'],
-                ':l_last' => $data['low'],
                 ':pe' => $data['pe'],
                 ':pe2' => $data['pe'],
                 ':cap' => $data['market_cap'],
@@ -287,12 +283,14 @@ $cacheData = ['timestamp' => date('Y-m-d H:i:s'), '_cached_at' => date('Y-m-d H:
 $stmt2 = $pdo->query("SELECT * FROM valores WHERE num_acciones > 0");
 foreach ($stmt2->fetchAll() as $r) {
     $t = $r['ticker_yahoo'] ?: $r['ticker'];
+    $history = json_decode($r['history_json'] ?: '[]', true);
+    $lastPoint = is_array($history) && !empty($history) ? end($history) : [];
     $cacheData['stocks'][$t] = [
         'price' => (float)$r['precio_actual'],
         'previous_close' => (float)$r['precio_cierre_anterior'],
-        'high' => (float)($r['high_last'] ?? 0),
-        'low' => (float)($r['low_last'] ?? 0),
-        'history' => json_decode($r['history_json'] ?: '[]', true),
+        'high' => (float)($lastPoint['h'] ?? 0),
+        'low' => (float)($lastPoint['l'] ?? 0),
+        'history' => $history,
     ];
 }
 // IBEX data

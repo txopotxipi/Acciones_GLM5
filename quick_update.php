@@ -559,11 +559,12 @@ function buildResponseFromDB($pdo, $tickers, $includeIbex) {
     foreach ($rows as $row) {
         $t = $row['ticker_yahoo'] ?: $row['ticker'];
         $history = json_decode($row['history_json'] ?: '[]', true);
+        $lastPoint = is_array($history) && !empty($history) ? end($history) : [];
         $stocks[$t] = [
             'price' => (float)$row['precio_actual'],
             'previous_close' => (float)$row['precio_cierre_anterior'],
-            'high' => (float)($row['high_last'] ?? 0),
-            'low' => (float)($row['low_last'] ?? 0),
+            'high' => (float)($lastPoint['h'] ?? 0),
+            'low' => (float)($lastPoint['l'] ?? 0),
             'history' => $history,
         ];
     }
