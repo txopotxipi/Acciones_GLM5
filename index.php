@@ -475,7 +475,7 @@ $marketOpen = ($dow <= 5 && (($hora > 9 || ($hora == 9 && $min >= 0)) && ($hora 
     <!-- PWA & Favicon Support: el manifiesto es un fichero estático (.webmanifest):
          el anti-bot de InfinityFree responde HTML a la petición de Manifest que hace
          el parser de Chrome a un recurso .php, y Chrome la rechaza como "Syntax error" -->
-    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="manifest" href="manifest.webmanifest?v=4.1">
     <link rel="icon" type="image/png" href="icon-192.png">
     <link rel="shortcut icon" href="favicon.ico">
     <meta name="theme-color" content="#6366f1">
