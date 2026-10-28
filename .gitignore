@@ -16,6 +16,9 @@ prod_live_page.html
 *.backup.*
 *.bak
 
+# Estado local del despliegue FTP
+.ftp-deploy-sync-state.json
+
 # Volcados SQL locales: solo se versiona el dump de referencia del esquema
 *.sql
 !sql/upgrade_schema.sql

@@ -484,6 +484,7 @@ $manifestDataUri = 'data:application/manifest+json;base64,' . base64_encode($man
     <link rel="icon" type="image/png" href="icon-192.png">
     <link rel="shortcut icon" href="favicon.ico">
     <meta name="theme-color" content="#6366f1">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Cartera Pro">
@@ -1077,10 +1078,9 @@ $manifestDataUri = 'data:application/manifest+json;base64,' . base64_encode($man
                 navigator.serviceWorker.register('service-worker.js?v=15')
                     .then(function(reg) {
                         reg.update();
-                        console.log('PWA Service Worker registrado y actualizado:', reg.scope);
                     })
                     .catch(function(err) {
-                        console.log('PWA Service Worker error:', err);
+                        console.warn('PWA: no se pudo registrar el Service Worker', err);
                     });
             });
         }

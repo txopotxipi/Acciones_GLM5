@@ -1,0 +1,62 @@
+name: Deploy a InfinityFree
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-infinityfree
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Subir a InfinityFree
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+
+      - name: Desplegar por FTPS
+        uses: SamKirkland/FTP-Deploy-Action@v4.4.0
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ftps
+          port: 21
+          security: loose
+          server-dir: ${{ secrets.FTP_SERVER_DIR }}
+          timeout: 60000
+          log-level: standard
+          # Solo se suben los archivos de producción.
+          # config.php / config_api.php se quedan en el servidor y nunca se sobrescriben.
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/.github/**
+            **/.playwright-mcp/**
+            **/private_cache/**
+            **/sql/**
+            **/*.sql
+            **/*.tmp
+            **/*.log
+            **/*.bak
+            **/*.backup.*
+            **/*.pdf
+            **/*.py
+            **/cache_data.json
+            **/ref_live_data.json
+            **/prod_live_page.html
+            **/eror.txt
+            **/config.php
+            **/config_api.php
+            **/config.example.php
+            **/config_api.example.php
+            **/.gitignore
